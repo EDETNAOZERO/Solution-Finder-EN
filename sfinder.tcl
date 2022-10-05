@@ -20,15 +20,10 @@ lappend auto_path "./ttk-themes/WinXP-Blue/"
 package require ttk::theme::winxpblue
 
 ###################
-#default options
-set version "1.0"
+set version "1.1"
 set program_url "https://github.com/EDETNAOZERO/Solution-Finder-EN/releases"
 wm title . "Solution finder EN $version"
 wm resizable . 0 0
-set fumen_url https://harddrop.com/fumen/ 
-set browser auto
-set preview_theme default
-set widget_theme vista
 ###################
 
 #sfinder fig util defaults, might be changed in the future versions
@@ -55,18 +50,36 @@ set tid 0
 tsv::set log lines {}
 set scrolling -1
 
-#read_options
+#read_options 
 if {[file exists data/options.txt]} {
 	set options [open data/options.txt r]
 	gets $options fumen_url
 	gets $options browser
 	gets $options preview_theme
 	gets $options widget_theme 
+	gets $options auto_clear
 	if { [catch {close $options} err ] } {
 		tk_messageBox -icon error -message "Could not close options.txt: $err"
 		exit
 	}
 }
+#default options
+if {(![info exists fumen_url]) || ($fumen_url eq "")} {
+	set fumen_url https://harddrop.com/fumen/ 
+}
+if {(![info exists browser]) || ($browser eq "")} {
+	set browser auto
+}
+if {(![info exists preview_theme]) || ($preview_theme eq "")} {
+	set preview_theme default
+}
+if {(![info exists widget_theme]) || ($widget_theme eq "")} {
+	set widget_theme vista
+}
+if {(![info exists auto_clear]) || ($auto_clear eq "")} {
+	set auto_clear 1
+}
+
 ttk::style theme use $widget_theme
 
 proc write_options {} {
@@ -74,11 +87,13 @@ proc write_options {} {
 	global browser
 	global preview_theme
 	global widget_theme
+	global auto_clear
 	set options [open data/options.txt w] 
 	puts $options "$fumen_url"
 	puts $options "$browser"
 	puts $options "$preview_theme"
 	puts $options "$widget_theme"
+	puts $options "$auto_clear"
 	if { [catch {close $options} err ] } {
 		tk_messageBox -icon error -message "Could not close options.txt: $err"
 		exit
@@ -173,6 +188,7 @@ grid [ttk::frame .common.main.row2.label_frame.row1] -column 0 -row 1 -sticky e 
 grid [ttk::button .common.main.row2.label_frame.row1.clear -text "Clear" -command {set queue ""}] -column 0 -row 1 -sticky w
 grid [ttk::entry .common.main.row2.label_frame.row1.queue -textvariable queue -width 30] -column 1 -row 1 -sticky we -padx 5
 grid [ttk::button .common.main.row2.label_frame.row1.go -text "Go" -command go] -column 2 -row 1 -sticky e
+bind .common.main.row2.label_frame.row1.queue <Return> {if {$queue ne "" } { go}}
 
 #row 3
 grid [ttk::button .common.main.open_minimal -text "Open minimal solutions in a browser" -command {invokeBrowser path_minimal.html}] -column 0 -row 3 -sticky w
@@ -333,7 +349,7 @@ proc edit_preset {} {
 
 proc show_about {} {
 	global program_url
-	if {[tk_messageBox -type okcancel -message "[wm title .]\n\nThe english-translated GUI for knewjade's solution-finder.\nPress OK to proceed to the website for updates."] eq "ok"} {
+	if {[tk_messageBox -type okcancel -message "[wm title .]\n\nAn English translated GUI for knewjade's Solution Finder.\nPress OK to proceed to the website for updates."] eq "ok"} {
 		invokeBrowser $program_url
 	}
 }
@@ -399,11 +415,11 @@ proc show_options {} {
 	global browser
 	global preview_theme
 	global widget_theme
-
+	global auto_clear
 
 	toplevel .options -takefocus 0
 	bind .options <Return> {apply_options}
-	bind .options <Escape> { destroy .options }
+	bind .options <Escape> {apply_options}
 	wm resizable .options 0 0
 	wm title .options "Options"
 	raise .options
@@ -434,9 +450,10 @@ proc show_options {} {
 	set l [lsearch -inline -all -not -exact $l default]
 	grid [ttk::combobox .options.c.row2.combo -textvariable widget_theme -state readonly -values [lsort -ascii $l] -width 20] -column 1 -row 0 -sticky we -padx 5
 	bind .options.c.row2.combo <<ComboboxSelected>> {ttk::style theme use $widget_theme} 
+	grid [ttk::checkbutton .options.c.row2.check -text "Auto clear queue" -variable auto_clear -onvalue 1 -offvalue 0] -column 2 -row 0 -sticky w -padx 20
 
 	#row 10 
-	grid [ttk::button .options.c.main -text "Apply options" -command apply_options] -column 0 -row 10 -sticky es
+	#grid [ttk::button .options.c.main -text "Apply options" -command apply_options] -column 0 -row 10 -sticky es
 	
 	#configure
 	foreach w [winfo children .options.c] {grid configure $w -padx 5 -pady 5}
@@ -907,7 +924,7 @@ proc lock_main {} {
 proc unlock_main {} {
 	global m
 	grid remove .common.main.progress
-	bind . <Return> {go}
+	bind . <Return> {if {$queue ne "" } { go}}
 	toggle_minimal
 	.common.main.row0.combo configure -state readonly
 	.common.main.row1.mirror_check configure -state enabled
@@ -967,6 +984,7 @@ proc go {} {
 	global fumen_url
 	global tid
 	global scrolling
+	global auto_clear
 	if {$preset_name eq ""} {
 		return
 	}
@@ -1026,6 +1044,9 @@ proc go {} {
 		puts $html_new $line
 		close $html
 		close $html_new
+	}
+	if {$auto_clear} {
+		set queue ""
 	}
 	unlock_main
 }
