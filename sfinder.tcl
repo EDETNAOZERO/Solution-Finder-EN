@@ -20,7 +20,7 @@ lappend auto_path "./ttk-themes/WinXP-Blue/"
 package require ttk::theme::winxpblue
 
 ###################
-set version "1.1"
+set version "1.2"
 set program_url "https://github.com/EDETNAOZERO/Solution-Finder-EN/releases"
 wm title . "Solution finder EN $version"
 wm resizable . 0 0
@@ -366,6 +366,7 @@ proc show_help {} {
 
 	grid [ttk::frame .help.c -padding "3 3 12 12"] -column 0 -row 0 -sticky news
 	grid [tk::text .help.c.text -font times -bd 0 -width 53 -height 14] -column 0 -row 0
+	#bindtags .help.c.text {.help all} ;#disable text selection
 
 	.help.c.text tag configure title -font BoldTimes -foreground blue
 	.help.c.text tag configure highlighted -font BoldTimes -foreground red
@@ -1024,23 +1025,19 @@ proc go {} {
 		tsv::set shared pid 0
 	} result
 	set scrolling -1
-	after idle update_log
+	after 1 update_log
 	vwait result
 	thread::release -wait $tid
 	set tid 0
-	after idle update_log;# there might be a remainder 
+	after 1 update_log;# there might be a remainder 
 	if {[file exists output/path_minimal.html]} {
 		set html [open output/path_minimal.html r]
+		fconfigure $html -encoding utf-8
 		set html_new [open path_minimal.html w]
 		gets $html line
-#		for {set i 4664} {$i<4695} {incr i} {
-#			.common.log configure -state normal
-#			.common.log insert end [string index $line $i]
-#			.common.log configure -state disabled
-#		}
 		regsub -all {http://fumen\.zui\.jp/} $line "$fumen_url" line
-		regsub {гѓ©г‚¤гѓіж¶€еЋ»гЃЄгЃ—} $line "Without line erasing" line
-		regsub {гѓ©г‚¤гѓіж¶€еЋ»гЃ‚г‚Љ} $line "With line erasing" line
+		regsub {ライン消去なし} $line "Without line erasing" line
+		regsub {ライン消去あり} $line "With line erasing" line
 		puts $html_new $line
 		close $html
 		close $html_new
@@ -1071,7 +1068,7 @@ proc update_log {} {
 		}
 	}
 	if {$tid ne 0} {
-		after idle update_log
+		after 1 update_log
 	}
 }
 
