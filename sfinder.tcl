@@ -20,7 +20,7 @@ lappend auto_path "./ttk-themes/WinXP-Blue/"
 package require ttk::theme::winxpblue
 
 ###################
-set version "1.2"
+set version "1.3"
 set program_url "https://github.com/EDETNAOZERO/Solution-Finder-EN/releases"
 wm title . "Solution finder EN $version"
 wm resizable . 0 0
@@ -419,8 +419,9 @@ proc show_options {} {
 	global auto_clear
 
 	toplevel .options -takefocus 0
-	bind .options <Return> {apply_options}
-	bind .options <Escape> {apply_options}
+	bind .options <Return> {event generate .options <Destroy>}
+	bind .options <Escape> {event generate .options <Destroy>}
+	bind .options <Destroy> {apply_options}
 	wm resizable .options 0 0
 	wm title .options "Options"
 	raise .options
