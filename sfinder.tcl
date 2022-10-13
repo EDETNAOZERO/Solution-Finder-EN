@@ -20,7 +20,7 @@ lappend auto_path "./ttk-themes/WinXP-Blue/"
 package require ttk::theme::winxpblue
 
 ###################
-set version "1.3"
+set version "1.4"
 set program_url "https://github.com/EDETNAOZERO/Solution-Finder-EN/releases"
 wm title . "Solution finder EN $version"
 wm resizable . 0 0
@@ -419,9 +419,9 @@ proc show_options {} {
 	global auto_clear
 
 	toplevel .options -takefocus 0
-	bind .options <Return> {event generate .options <Destroy>}
-	bind .options <Escape> {event generate .options <Destroy>}
-	bind .options <Destroy> {apply_options}
+	bind .options <Return> {apply_options}
+	bind .options <Escape> {apply_options}
+	wm protocol .options WM_DELETE_WINDOW apply_options
 	wm resizable .options 0 0
 	wm title .options "Options"
 	raise .options
@@ -528,6 +528,7 @@ proc no_preview {} {
 }
 
 proc lock_preset {} {
+	.common.preset.row0.entry configure -state disabled
 	foreach w [winfo children .common.preset.row2] {$w configure -state disabled}
 	.common.preset.row3.lines_spin configure -state disabled
 	.common.preset.row4.combo configure -state disabled
@@ -537,6 +538,10 @@ proc lock_preset {} {
 }
 
 proc unlock_preset {} {
+	global preset_name
+	if {$preset_name ne "temp"} {
+		.common.preset.row0.entry configure -state enabled
+	}
 	foreach w [winfo children .common.preset.row2] {$w configure -state enabled}
 	.common.preset.row3.lines_spin configure -state enabled
 	.common.preset.row4.combo configure -state readonly
@@ -774,6 +779,7 @@ proc save_preset {} {
 	if {("" ne $preset_old_name) && ($preset_old_name ne $preset_name)} {
 		file delete -force "presets/$preset_old_name"
 	}
+	unlock_preset
 	show_main
 }
 
