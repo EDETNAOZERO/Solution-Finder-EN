@@ -20,7 +20,7 @@ lappend auto_path "./ttk-themes/WinXP-Blue/"
 package require ttk::theme::winxpblue
 
 ###################
-set version "1.4"
+set version "1.6"
 set program_url "https://github.com/EDETNAOZERO/Solution-Finder-EN/releases"
 wm title . "Solution finder EN $version"
 wm resizable . 0 0
@@ -34,6 +34,7 @@ set preview_full_delta 2
 set preview_full_border 2 
 
 set java [auto_execok java]
+set 7za [auto_execok 7za]
 set java_website https://www.java.com/download/
 tsv::set shared java $java
 
@@ -49,6 +50,7 @@ set preset_old_name ""
 set tid 0
 tsv::set log lines {}
 set scrolling -1
+set first_url ""
 
 #read_options 
 if {[file exists data/options.txt]} {
@@ -77,10 +79,16 @@ if {(![info exists widget_theme]) || ($widget_theme eq "")} {
 	set widget_theme vista
 }
 if {(![info exists auto_clear]) || ($auto_clear eq "")} {
-	set auto_clear 1
+	set auto_clear 0
 }
 
-ttk::style theme use $widget_theme
+set themes_list [ttk::style theme names]
+set themes_list [lsearch -inline -all -not -exact $themes_list classic]
+set themes_list [lsearch -inline -all -not -exact $themes_list default]
+if {[lsearch -exact $themes_list $widget_theme]==-1} {
+	set widget_theme [lindex $themes_list 0]
+}
+ttk::style theme use $widget_theme 
 
 proc write_options {} {
 	global fumen_url
@@ -191,9 +199,12 @@ grid [ttk::button .common.main.row2.label_frame.row1.go -text "Go" -command go] 
 bind .common.main.row2.label_frame.row1.queue <Return> {if {$queue ne "" } { go}}
 
 #row 3
-grid [ttk::button .common.main.open_minimal -text "Open minimal solutions in a browser" -command {invokeBrowser path_minimal.html}] -column 0 -row 3 -sticky w
+grid [ttk::button .common.main.open_minimal -text "Open minimal solutions in a browser" -command {invokeBrowser path_minimal.html}] -column 0 -row 3 -sticky we
 grid [ttk::progressbar .common.main.progress -orient horizontal -mode indeterminate] -column 1 -row 3 -sticky we -columnspan 9
 .common.main.progress start
+
+#row 4
+grid [ttk::button .common.main.open_first -text "Open the first solution in a browser" -command open_first -state disabled] -column 0 -row 4 -sticky we
 
 #configure
 foreach w [winfo children .common.main] {grid configure $w -padx 5 -pady 5}
@@ -263,6 +274,7 @@ proc show_main {} {
 	$m.edit entryconfigure "Delete current preset" -state active
 	find_presets
 	toggle_minimal
+	update_first
 }
 
 proc show_preset {} {
@@ -417,6 +429,7 @@ proc show_options {} {
 	global preview_theme
 	global widget_theme
 	global auto_clear
+	global themes_list
 
 	toplevel .options -takefocus 0
 	bind .options <Return> {apply_options}
@@ -447,10 +460,7 @@ proc show_options {} {
 	#row 2
 	grid [ttk::label .options.c.label -text "Widget theme:"] -column 0 -row 2 -sticky e
 	grid [ttk::frame .options.c.row2] -column 1 -row 2 -sticky news 
-	set l [ttk::style theme names]
-	set l [lsearch -inline -all -not -exact $l classic]
-	set l [lsearch -inline -all -not -exact $l default]
-	grid [ttk::combobox .options.c.row2.combo -textvariable widget_theme -state readonly -values [lsort -ascii $l] -width 20] -column 1 -row 0 -sticky we -padx 5
+	grid [ttk::combobox .options.c.row2.combo -textvariable widget_theme -state readonly -values [lsort -ascii $themes_list] -width 20] -column 1 -row 0 -sticky we -padx 5
 	bind .options.c.row2.combo <<ComboboxSelected>> {ttk::style theme use $widget_theme} 
 	grid [ttk::checkbutton .options.c.row2.check -text "Auto clear queue" -variable auto_clear -onvalue 1 -offvalue 0] -column 2 -row 0 -sticky w -padx 20
 
@@ -661,6 +671,7 @@ proc save_preset {} {
 	global preview_full_w
 	global preview_full_h
 	global lines
+	global 7za
 	set fumen_unrecognized "Imported fumen data can't be processed with this utility. Try to fill the field again and re-import the fumen data."
 	if {$preset_name eq ""} {
 		tk_messageBox -type ok -icon warning -message "Enter the name of the preset"
@@ -703,7 +714,11 @@ proc save_preset {} {
 		return
 	}
 
-	set out [open "|./bin/7za.exe x output/output.xlsx -ooutput 2>@1" r]
+	if {$7za eq ""} {
+		set out [open "|./bin/7za.exe x output/output.xlsx -ooutput 2>@1" r]
+	} else {
+		set out [open "|$7za x output/output.xlsx -ooutput 2>@1" r]
+	}
 	while {1} {
 		fileevent $out readable 
 		if {[eof $out]} {
@@ -932,7 +947,7 @@ proc lock_main {} {
 proc unlock_main {} {
 	global m
 	grid remove .common.main.progress
-	bind . <Return> {if {$queue ne "" } { go}}
+	#bind . <Return> {if {$queue ne "" } { go}}
 	toggle_minimal
 	.common.main.row0.combo configure -state readonly
 	.common.main.row1.mirror_check configure -state enabled
@@ -1048,6 +1063,7 @@ proc go {} {
 		puts $html_new $line
 		close $html
 		close $html_new
+		update_first
 	}
 	if {$auto_clear} {
 		set queue ""
@@ -1100,6 +1116,7 @@ proc toggle_mirror {} {
 }
 
 proc import {} {
+	global 7za
 	set types {
 	    {{7-zip archives} {.7z}}
 	}
@@ -1108,7 +1125,11 @@ proc import {} {
 		return
 	}
 	file delete -force output
-	set out [open "|./bin/7za.exe x \"$filename\" -ooutput 2>@1" r]
+	if {$7za eq ""} {
+		set out [open "|./bin/7za.exe x \"$filename\" -ooutput 2>@1" r]
+	} else {
+		set out [open "|$7za x \"$filename\" -ooutput 2>@1" r]
+	}
 	while {1} {
 		fileevent $out readable 
 		if {[eof $out]} {
@@ -1138,6 +1159,7 @@ proc import {} {
 
 proc export {} {
 	global preset_name
+	global 7za
 	if {$preset_name eq "" } {
 		return
 	}
@@ -1146,7 +1168,11 @@ proc export {} {
 		return
 	}
 	cd "./presets/$preset_name/"
-	set out [open "|../../bin/7za.exe a \"$dir/$preset_name.7z\" *" r]
+	if {$7za eq ""} {
+		set out [open "|../../bin/7za.exe a \"$dir/$preset_name.7z\" *" r]
+	} else {
+		set out [open "|$7za a \"$dir/$preset_name.7z\" *" r]
+	}
 	while {1} {
 		fileevent $out readable 
 		if {[eof $out]} {
@@ -1160,9 +1186,37 @@ proc export {} {
 	cd "../../"
 }
 
+proc update_first {} {
+	global fumen_url
+	global first_url
+	if {[file exists path_minimal.html]} {
+		set html [open path_minimal.html r]
+		gets $html line
+		close $html
+		if {[regsub {^.*<h2>} $line "" line] && 
+			[regsub {^.*<a href='} $line "" line] && 
+			[regsub {'>.*$} $line "" line]&&
+			([string compare -length [string length $fumen_url] $fumen_url $line] == 0)} {
+			set first_url $line
+			.common.main.open_first configure -state enabled
+		} else {
+			set first_url ""
+			.common.main.open_first configure -state disabled
+		}
+	}
+}
+
+proc open_first {} {
+	global first_url
+	if {$first_url ne "" } {
+		invokeBrowser $first_url
+	} else {
+		invokeBrowser path_minimal.html
+	}
+}
+
 ######## starting GUI here
 if {$java eq ""} {
-	grid remove .common
 	if { [tk_messageBox -type okcancel -icon error -message "Java is not installed on this PC. Press OK to proceed to the java website for installation."] eq "ok" } {
 		invokeBrowser "$java_website"
 	}
